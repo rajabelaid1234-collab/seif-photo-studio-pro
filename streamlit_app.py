@@ -132,9 +132,9 @@ with st.sidebar:
             raw=uploaded.getvalue(); digest=hashlib.sha256(raw).hexdigest()
             if st.session_state.get("digest")!=digest:
                 st.session_state.original=raw;st.session_state.digest=digest;st.session_state.cutout=None;st.session_state.lastkey=None
-        model_label=st.selectbox("محرك القص",list(MODEL_OPTIONS.keys()),index=0)
+        model_label=st.selectbox("محرك القص",list(MODEL_OPTIONS.keys()),index=1)
         model=MODEL_OPTIONS[model_label]
-        st.caption("BirefNet قد يكون أدق في بعض صور البورتريه، لكنه يحتاج ذاكرة ووقتًا أكثر.")
+        st.caption("الاختيار الافتراضي U²-Net Human Seg أخف على الخادم. محرك BirefNet Portrait يحتاج تنزيل نموذج ضخم يقارب 1 GB وقد يتسبب في نفاد الذاكرة أو بطء بدء التطبيق.")
         st.divider();st.subheader("الخلفية")
         category=st.selectbox("قسم المكتبة",list(CATEGORIES.keys()))
         local=local_backgrounds(category)
@@ -183,7 +183,7 @@ if page=="المكتبة":
             for i,item in enumerate(items):
                 with cols[i%len(cols)]:
                     try:
-                        data=download_online_image(item[2]); st.image(data,caption=item[0],use_container_width=True)
+                        data=download_online_image(item[2]); st.image(data,caption=item[0],width="stretch")
                         st.download_button("تنزيل الخلفية",data=data,file_name=f"background_{i+1}.jpg",mime="image/jpeg",key=f"libdl_{cat}_{i}")
                     except Exception:st.warning(f"تعذر تحميل الصورة الآن: {item[0]}")
         else:st.caption("لا توجد صور حقيقية مضافة لهذا القسم بعد.")
@@ -197,7 +197,7 @@ if page=="مشاريعي / السجل":
     else:
         for i,item in enumerate(reversed(st.session_state.history)):
             with st.expander(item["label"],expanded=(i==0)):
-                st.image(item["bytes"],use_container_width=True)
+                st.image(item["bytes"],width="stretch")
                 st.download_button("تنزيل النتيجة",data=item["bytes"],file_name=f"seif_history_{len(st.session_state.history)-i}.png",mime="image/png",key=f"hist_{i}")
     st.caption("حاليًا السجل داخل جلسة المتصفح. حفظ دائم بين الزيارات يحتاج قاعدة بيانات أو ملفات مشاريع على مساحة تخزين دائمة.")
     st.stop()
@@ -218,10 +218,10 @@ original=pil_open(st.session_state.original)
 left,right=st.columns(2,gap="large")
 with left:
     st.subheader("قبل")
-    st.image(original,use_container_width=True)
+    st.image(original,width="stretch")
 with right:
     st.subheader("بعد")
-    if st.button("✂️ إزالة الخلفية",type="primary",use_container_width=True):
+    if st.button("✂️ إزالة الخلفية",type="primary",width="stretch"):
         try:
             with st.spinner("يجري قصّ الشخص وتحسين الحواف..."):
                 st.session_state.cutout=cutout_cached(st.session_state.original,model)
@@ -242,7 +242,7 @@ with right:
         if preset!="بدون قص خاص":result=official_crop(result,preset)
         result_png=bytes_png(result)
         result_key=hashlib.sha256(result_png).hexdigest()
-        st.image(result,use_container_width=True)
+        st.image(result,width="stretch")
         # Keep unique result history within this session.
         if not st.session_state.history or st.session_state.history[-1]["key"]!=result_key:
             st.session_state.history.append({"key":result_key,"bytes":result_png,"label":f"نتيجة {len(st.session_state.history)+1}"})
@@ -251,8 +251,8 @@ with right:
         st.subheader("مقارنة قبل / بعد")
         compare=st.slider("حرّك المؤشر لمقارنة الصورة الأصلية والنتيجة",0,100,50,key="compare")
         ca,cb=st.columns(2)
-        with ca:st.image(original.resize(result.size,Image.Resampling.LANCZOS),caption=f"الأصل — {100-compare}%",use_container_width=True)
-        with cb:st.image(result,caption=f"النتيجة — {compare}%",use_container_width=True)
+        with ca:st.image(original.resize(result.size,Image.Resampling.LANCZOS),caption=f"الأصل — {100-compare}%",width="stretch")
+        with cb:st.image(result,caption=f"النتيجة — {compare}%",width="stretch")
         # Brush correction: paint regions to mark alpha erase/restore. This is a dedicated mask canvas.
         st.subheader("🖌️ فرشاة تصحيح القص")
         st.caption("ارسم بالأحمر على أجزاء الخلفية المتبقية لإخفائها، وبالأخضر على أجزاء الشخص التي تريد استعادتها. ثم طبّق التصحيح.")
@@ -287,8 +287,8 @@ with right:
         except ImportError:
             st.warning("فرشاة التصحيح تحتاج تثبيت streamlit-drawable-canvas؛ أضفها من requirements.txt ثم أعد تشغيل التطبيق.")
         d1,d2=st.columns(2)
-        with d1:st.download_button("تنزيل JPG عالي الجودة",data=bytes_jpg(result),file_name="seif_photo_studio.jpg",mime="image/jpeg",use_container_width=True)
-        with d2:st.download_button("تنزيل PNG",data=result_png,file_name="seif_photo_studio.png",mime="image/png",use_container_width=True)
+        with d1:st.download_button("تنزيل JPG عالي الجودة",data=bytes_jpg(result),file_name="seif_photo_studio.jpg",mime="image/jpeg",width="stretch")
+        with d2:st.download_button("تنزيل PNG",data=result_png,file_name="seif_photo_studio.png",mime="image/png",width="stretch")
         st.subheader("حفظ المشروع")
         project_name=st.text_input("اسم المشروع",value="مشروع جديد")
         if st.button("حفظ في سجل الجلسة"):
