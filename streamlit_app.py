@@ -187,12 +187,12 @@ if page == "مكتبة الخلفيات":
         return items
     if st.button("🔎 عرض الخلفيات", type="primary", key="standalone_commons_search"):
         st.session_state["standalone_background_search_category"] = chosen_category
-        st.session_state.pop("standalone_background_results", None)
+        st.session_state.pop("standalone_background_results_v2", None)
     active_category = st.session_state.get("standalone_background_search_category", chosen_category)
     try:
         if (
-            "standalone_background_results" not in st.session_state
-            or st.session_state.get("standalone_background_results_category") != active_category
+            "standalone_background_results_v2" not in st.session_state
+            or st.session_state.get("standalone_background_results_v2_v2_category") != active_category
         ):
             with st.spinner("جارٍ البحث عن صور مناسبة..."):
                 if active_category == "خلفيات استوديو رمادية وبيضاء":
@@ -205,9 +205,9 @@ if page == "مكتبة الخلفيات":
                         if not any(term in item["title"].lower() for term in excluded_terms)
                     ]
                 # Do not silently replace rejected results with unrelated photos.
-                st.session_state["standalone_background_results"] = filtered[:10]
-                st.session_state["standalone_background_results_category"] = active_category
-        results = st.session_state["standalone_background_results"]
+                st.session_state["standalone_background_results_v2"] = filtered[:10]
+                st.session_state["standalone_background_results_v2_v2_category"] = active_category
+        results = st.session_state["standalone_background_results_v2"]
         if not results:
             st.warning("لم تظهر نتائج تطابق خلفيات التصوير المطلوبة في هذا التصنيف. لم نعرض صور حفلات أو أشخاص كبديل. جرّب إعادة البحث لاحقًا.")
         else:
