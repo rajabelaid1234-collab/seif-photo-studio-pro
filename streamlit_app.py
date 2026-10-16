@@ -144,6 +144,47 @@ if page == "مكتبة الخلفيات":
         list(category_labels.keys()),
         key="standalone_commons_bg_category",
     )
+
+    def make_studio_backdrops():
+        """Create clean, people-free studio backdrops locally instead of searching random photos."""
+        from PIL import ImageDraw
+        width, height = 1200, 1600
+        presets = [
+            ("أبيض نقي", (250, 250, 250), (250, 250, 250)),
+            ("رمادي فاتح", (238, 238, 238), (205, 205, 205)),
+            ("رمادي متوسط", (145, 145, 145), (95, 95, 95)),
+            ("رمادي داكن", (82, 82, 82), (38, 38, 38)),
+            ("بيج دافئ", (245, 233, 214), (211, 190, 163)),
+            ("أزرق هادئ", (205, 222, 239), (128, 157, 190)),
+            ("وردي باهت", (246, 225, 226), (218, 183, 188)),
+            ("أخضر زيتوني فاتح", (225, 228, 211), (164, 174, 145)),
+            ("فحمي", (65, 65, 68), (20, 20, 22)),
+            ("أبيض بتدرج ناعم", (255, 255, 255), (225, 228, 232)),
+        ]
+        items = []
+        for name, top, bottom in presets:
+            image = Image.new("RGB", (width, height))
+            pixels = image.load()
+            for y in range(height):
+                t = y / max(1, height - 1)
+                color = tuple(int(top[c] * (1 - t) + bottom[c] * t) for c in range(3))
+                for x in range(width):
+                    pixels[x, y] = color
+            # Subtle floor horizon for a few studio-style presets, never people or objects.
+            if name in ("رمادي فاتح", "بيج دافئ", "أبيض بتدرج ناعم"):
+                draw = ImageDraw.Draw(image)
+                horizon = int(height * 0.78)
+                draw.line((0, horizon, width, horizon), fill=tuple(max(0, c - 12) for c in bottom), width=3)
+            items.append({
+                "title": name,
+                "preview": image,
+                "url": None,
+                "page": None,
+                "license": "خلفية أنشأها الموقع",
+                "artist": "",
+                "local_image": image,
+            })
+        return items
     if st.button("🔎 عرض الخلفيات", type="primary", key="standalone_commons_search"):
         st.session_state["standalone_background_search_category"] = chosen_category
         st.session_state.pop("standalone_background_results", None)
@@ -154,11 +195,15 @@ if page == "مكتبة الخلفيات":
             or st.session_state.get("standalone_background_results_category") != active_category
         ):
             with st.spinner("جارٍ البحث عن صور مناسبة..."):
-                found = search_commons_backgrounds(category_labels[active_category], limit=50)
-                filtered = [
-                    item for item in found
-                    if not any(term in item["title"].lower() for term in excluded_terms)
-                ]
+                if active_category == "خلفيات استوديو رمادية وبيضاء":
+                    # This category is generated locally, so it can never return people or unrelated photographs.
+                    filtered = make_studio_backdrops()
+                else:
+                    found = search_commons_backgrounds(category_labels[active_category], limit=50)
+                    filtered = [
+                        item for item in found
+                        if not any(term in item["title"].lower() for term in excluded_terms)
+                    ]
                 # Do not silently replace rejected results with unrelated photos.
                 st.session_state["standalone_background_results"] = filtered[:10]
                 st.session_state["standalone_background_results_category"] = active_category
@@ -174,12 +219,15 @@ if page == "مكتبة الخلفيات":
                         st.image(item["preview"], caption=item["title"], use_container_width=True)
                         if st.button("✅ استخدم هذه الخلفية", key="use_gallery_bg_" + str(results.index(item))):
                             try:
-                                req = urllib.request.Request(
-                                    item["url"],
-                                    headers={"User-Agent": "SeifPhotoStudio/1.0"},
-                                )
-                                with urllib.request.urlopen(req, timeout=20) as response:
-                                    bg_image = load_image(io.BytesIO(response.read())).convert("RGB")
+                                if item.get("local_image") is not None:
+                                    bg_image = item["local_image"].copy()
+                                else:
+                                    req = urllib.request.Request(
+                                        item["url"],
+                                        headers={"User-Agent": "SeifPhotoStudio/1.0"},
+                                    )
+                                    with urllib.request.urlopen(req, timeout=20) as response:
+                                        bg_image = load_image(io.BytesIO(response.read())).convert("RGB")
                                 st.session_state["selected_online_background"] = bg_image
                                 st.session_state["selected_online_background_title"] = item["title"]
                                 st.session_state["studio_background_choice"] = "خلفية من المكتبة"
