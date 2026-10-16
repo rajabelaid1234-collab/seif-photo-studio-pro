@@ -206,7 +206,6 @@ with col_b:
             st.image(result, use_container_width=True)
 
             # Keep a short, deduplicated history of finished previews.
-            history_key = hashlib.sha256(buf.getvalue()).hexdigest() if st.session_state.last_result else result_key
             if not st.session_state.history or st.session_state.history[-1]["key"] != result_key:
                 st.session_state.history.append({
                     "key": result_key,
