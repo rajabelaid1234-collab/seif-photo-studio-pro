@@ -115,16 +115,16 @@ def add_to_library(image, filename, fmt="PNG"):
 if page == "مكتبة الخلفيات":
     st.header("🖼️ مكتبة خلفيات التصوير")
     st.write("اختر صورة من البطاقات أدناه. عند الضغط على «استخدم هذه الخلفية»، سينقلك الموقع إلى الاستوديو ويجهّزها للتطبيق على صورتك.")
-    # Keep Wikimedia queries short: long queries require every word to match and often return zero files.
+    # Search for usable scene/background photographs, not generic event photos.
     category_labels = {
-        "أعراس وقاعات زفاف": "wedding",
-        "خلفيات استوديو رمادية وبيضاء": "studio backdrop",
-        "بورتريه فاخر وديكور كلاسيكي": "luxury interior",
-        "خلفيات تونسية تقليدية": "Tunisia architecture",
-        "طبيعة خضراء ومناظر واسعة": "forest landscape",
-        "بحر وشواطئ جميلة": "beach",
-        "حدائق وأزهار": "flower garden",
-        "مدن ومعمار أنيق": "historic city",
+        "أعراس وقاعات زفاف": "wedding hall interior",
+        "خلفيات استوديو رمادية وبيضاء": "photography studio backdrop",
+        "بورتريه فاخر وديكور كلاسيكي": "luxury interior room",
+        "خلفيات تونسية تقليدية": "Sidi Bou Said architecture",
+        "طبيعة خضراء ومناظر واسعة": "landscape panorama",
+        "بحر وشواطئ جميلة": "beach coastline landscape",
+        "حدائق وأزهار": "flower garden landscape",
+        "مدن ومعمار أنيق": "historic city street architecture",
     }
     excluded_terms = (
         "statue", "sculpture", "monument", "memorial", "grave", "cemetery",
@@ -132,6 +132,11 @@ if page == "مكتبة الخلفيات":
         "underwater", "under water", "macro", "close-up", "close up",
         "water drop", "raindrop", "dew drop", "single drop", "fungus",
         "mushroom", "insect", "microscope", "abstract texture",
+        # Exclude event/documentary photos that are unsuitable as portrait backgrounds.
+        "dancing", "dance", "dancer", "people", "crowd", "bride and groom",
+        "wedding ceremony", "ceremony", "signing", "contract", "marriage license",
+        "priest", "church", "church wedding", "worship", "congregation",
+        "portrait of", "person", "couple", "guests", "reception guests",
     )
     chosen_category = st.selectbox(
         "نوع الخلفية",
@@ -149,22 +154,17 @@ if page == "مكتبة الخلفيات":
         ):
             with st.spinner("جارٍ البحث عن صور مناسبة..."):
                 found = search_commons_backgrounds(category_labels[active_category], limit=50)
-                # If the two-word search is too restrictive, retry using the category's main keyword.
-                if not found:
-                    fallback_query = category_labels[active_category].split()[0]
-                    found = search_commons_backgrounds(fallback_query, limit=50)
                 filtered = [
                     item for item in found
                     if not any(term in item["title"].lower() for term in excluded_terms)
                 ]
-                # Filtering should not accidentally hide every result; use the original search results as a fallback.
-                if not filtered:
-                    filtered = found
+                # Never fall back to generic event photos: if unsuitable results are filtered out,
+                # tell the user honestly rather than showing people/ceremonies as backgrounds.
                 st.session_state["standalone_background_results"] = filtered[:10]
                 st.session_state["standalone_background_results_category"] = active_category
         results = st.session_state["standalone_background_results"]
         if not results:
-            st.warning("لم نجد صورًا مناسبة في هذا التصنيف حاليًا. جرّب تصنيفًا آخر.")
+            st.warning("لم تظهر نتائج تطابق خلفيات التصوير المطلوبة في هذا التصنيف. لم نعرض صور حفلات أو أشخاص كبديل. جرّب إعادة البحث لاحقًا.")
         else:
             st.caption(f"عدد الصور التي عُثر عليها: {len(results)} / 10")
             for row_start in range(0, len(results), 2):
