@@ -3,3 +3,5 @@ Pillow>=10.0
 numpy>=1.26
 rembg[cpu]>=2.0.57
 onnxruntime>=1.18
+streamlit-drawable-canvas>=0.9.3
+requests>=2.31
