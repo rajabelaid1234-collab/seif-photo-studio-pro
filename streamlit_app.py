@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import io
+import numpy as np
 import streamlit as st
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops, ImageOps
+from streamlit_drawable_canvas import st_canvas
 
 from image_processing import (
     load_image,
@@ -17,6 +19,7 @@ from image_processing import (
     create_gradient_background,
     image_to_bytes,
     OFFICIAL_SIZES,
+    brush_edit,
 )
 
 st.set_page_config(
@@ -323,6 +326,8 @@ else:
                         cutout.size, Image.Resampling.LANCZOS
                     )
 
+                st.session_state["studio_cutout"] = cutout.copy()
+                st.session_state["studio_background"] = bg.copy()
                 result = composite_background(cutout, bg)
                 st.session_state["studio_result"] = result
 
@@ -347,6 +352,50 @@ else:
         with after:
             st.caption("بعد التعديل")
             st.image(result, width="stretch")
+
+        # فرشاة يدوية حقيقية: يرسم المستخدم فوق معاينة الشخص، ثم نطبّق القناع على الصورة الأصلية.
+        with st.expander("🖌️ مختبر إصلاح القصّ — استرجاع أو محو أجزاء"):
+            editable = st.session_state.get("studio_cutout")
+            if editable is None:
+                st.info("عالج الصورة أولًا حتى تظهر أداة الفرشاة.")
+            else:
+                brush_mode = st.radio(
+                    "وظيفة الفرشاة", ["استرجاع الجزء من الصورة الأصلية", "محو الجزء وجعله شفافًا"],
+                    horizontal=True, key="brush_mode"
+                )
+                brush_size = st.slider("حجم الفرشاة", 4, 80, 24, key="brush_size")
+                max_w = min(700, editable.width)
+                canvas_h = max(200, int(editable.height * max_w / editable.width))
+                preview_bg = composite_background(
+                    editable, create_solid_background(editable.size, "#777777")
+                ).convert("RGB").resize((max_w, canvas_h), Image.Resampling.LANCZOS)
+                canvas_result = st_canvas(
+                    fill_color="rgba(255, 0, 255, 0)", stroke_width=brush_size,
+                    stroke_color="#ff00ff", background_image=preview_bg,
+                    update_streamlit=True, height=canvas_h, width=max_w,
+                    drawing_mode="freedraw", key="mask_repair_canvas"
+                )
+                if st.button("✅ تطبيق الفرشاة", key="apply_brush_edit"):
+                    if canvas_result.image_data is None:
+                        st.warning("ارسم فوق المنطقة التي تريد تعديلها أولًا.")
+                    else:
+                        drawn = Image.fromarray(canvas_result.image_data.astype("uint8")).convert("RGB")
+                        baseline = preview_bg.convert("RGB")
+                        difference = ImageChops.difference(drawn, baseline).convert("L")
+                        stroke_mask = difference.point(lambda p: 255 if p > 35 else 0)
+                        if stroke_mask.getbbox() is None:
+                            st.warning("لم يتم اكتشاف أي ضربة فرشاة. ارسم ثم أعد المحاولة.")
+                        else:
+                            stroke_mask = stroke_mask.resize(editable.size, Image.Resampling.NEAREST)
+                            edited = brush_edit(
+                                editable, original, stroke_mask,
+                                restore=(brush_mode == "استرجاع الجزء من الصورة الأصلية")
+                            )
+                            st.session_state["studio_cutout"] = edited
+                            bg_saved = st.session_state.get("studio_background")
+                            if bg_saved is not None:
+                                st.session_state["studio_result"] = composite_background(edited, bg_saved)
+                            st.rerun()
 
         fmt = st.radio(
             "صيغة التنزيل",
