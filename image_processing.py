@@ -15,11 +15,14 @@ MAX_SIDE = 3000
 MAX_PIXELS = 25_000_000
 PROJECT_VERSION = 1
 
+# Portrait-focused models first: usually better for people and fine hair.
+# If a model or its optional alpha-matting dependencies fail, remove_background
+# automatically falls back to ordinary rembg removal and then the next model.
 MODEL_CHAIN = [
-    "u2net_human_seg",
-    "u2netp",
     "birefnet-portrait",
+    "u2net_human_seg",
     "isnet-general-use",
+    "u2netp",
 ]
 
 OFFICIAL_SIZES = {
@@ -101,12 +104,17 @@ def composite_background(
 def remove_background(
     image: Image.Image, model_name: str | None = None
 ) -> Image.Image:
-    """Remove the background with rembg; try alternative models on failure."""
+    """
+    Remove a background with a portrait-first model chain.
+
+    First try alpha matting, which can recover softer hair edges. If alpha
+    matting or its optional dependencies fail, fall back to standard rembg
+    removal for that model, then try the next model.
+    """
     from rembg import new_session, remove
 
     source = image.convert("RGBA")
     errors = []
-
     models = [model_name] if model_name else MODEL_CHAIN
 
     for model in models:
@@ -114,8 +122,27 @@ def remove_background(
             continue
         try:
             session = new_session(model)
-            result = remove(source, session=session)
-            return result.convert("RGBA")
+            # Hair-friendly alpha matting. Some environments do not have
+            # pymatting installed, so this attempt must never block fallback.
+            try:
+                result = remove(
+                    source,
+                    session=session,
+                    alpha_matting=True,
+                    alpha_matting_foreground_threshold=240,
+                    alpha_matting_background_threshold=10,
+                    alpha_matting_erode_size=10,
+                )
+                result = result.convert("RGBA")
+                if result.getchannel("A").getextrema() == (255, 255):
+                    # Avoid returning a fully opaque image if a backend did
+                    # not produce a usable transparency mask.
+                    raise RuntimeError("Model returned no transparent mask")
+                return result
+            except Exception as matting_error:
+                errors.append(f"{model} alpha matting: {matting_error}")
+                result = remove(source, session=session).convert("RGBA")
+                return result
         except Exception as exc:
             errors.append(f"{model}: {exc}")
 
@@ -123,7 +150,6 @@ def remove_background(
         "Background removal failed. Check model downloads and dependencies. "
         + " | ".join(errors)
     )
-
 
 def refine_mask(
     mask: Image.Image,
