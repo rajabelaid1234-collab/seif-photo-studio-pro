@@ -96,6 +96,7 @@ with st.sidebar:
     page = st.radio(
         "القسم",
         ["استوديو الصور", "صانع الصور الرسمية", "مكتبة الخلفيات", "مكتبتي", "حول الاستوديو"],
+        key="sidebar_page",
     )
     st.divider()
     st.caption("SEIF PHOTO STUDIO PRO MAX")
@@ -112,60 +113,79 @@ def add_to_library(image, filename, fmt="PNG"):
     })
 
 if page == "مكتبة الخلفيات":
-    st.header("🖼️ مكتبة الخلفيات الاحترافية")
-    st.write("٨ تصنيفات، مع عرض ١٠ صور لكل تصنيف. اختر خلفية مناسبة للتصوير، ثم افتح استوديو الصور لتطبيقها.")
+    st.header("🖼️ مكتبة خلفيات التصوير")
+    st.write("اختر صورة من البطاقات أدناه. عند الضغط على «استخدم هذه الخلفية»، سينقلك الموقع إلى الاستوديو ويجهّزها للتطبيق على صورتك.")
     category_labels = {
-        "أعراس وقاعات زفاف": '"wedding hall" OR "wedding reception" OR "wedding decor"',
-        "خلفيات استوديو رمادية وبيضاء": '"photo studio backdrop" OR "portrait studio background" OR "seamless backdrop"',
-        "بورتريه فاخر وديكور كلاسيكي": '"portrait photography backdrop" OR "classic interior" OR "luxury interior"',
-        "خلفيات تونسية تقليدية": '"Tunisian architecture" OR "Sidi Bou Said" OR "Tunisian courtyard"',
-        "طبيعة وغابات": '"forest landscape" OR "green nature background" OR "woodland"',
-        "بحر وشواطئ": '"beach landscape" OR "sea coast" OR "ocean background"',
-        "حدائق وأزهار": '"flower garden" OR "flower field" OR "botanical garden"',
-        "مدن ومعمار أنيق": '"historic street architecture" OR "old town architecture" OR "building facade"',
+        "أعراس وقاعات زفاف": "wedding hall wedding reception wedding decor",
+        "خلفيات استوديو رمادية وبيضاء": "portrait photography studio seamless backdrop",
+        "بورتريه فاخر وديكور كلاسيكي": "luxury classic interior elegant room",
+        "خلفيات تونسية تقليدية": "Sidi Bou Said Tunisia architecture courtyard",
+        "طبيعة خضراء ومناظر واسعة": "green forest landscape scenic panorama",
+        "بحر وشواطئ جميلة": "tropical beach coastline turquoise sea",
+        "حدائق وأزهار": "beautiful flower garden colorful flower beds",
+        "مدن ومعمار أنيق": "historic old town street beautiful architecture",
     }
-    chosen_category = st.selectbox(
-        "اختر نوع الخلفية",
-        list(category_labels.keys()),
-        key="standalone_commons_bg_category",
-    )
-    if st.button("🔎 عرض ١٠ خلفيات", type="primary", key="standalone_commons_search"):
-        st.session_state["standalone_background_search_category"] = chosen_category
-        st.session_state.pop("standalone_background_results", None)
-    active_category = st.session_state.get("standalone_background_search_category", chosen_category)
     excluded_terms = (
         "statue", "sculpture", "monument", "memorial", "grave", "cemetery",
         "horror", "skull", "gargoyle", "doll", "mannequin", "wax figure",
+        "underwater", "under water", "macro", "close-up", "close up",
+        "water drop", "raindrop", "dew drop", "single drop", "fungus",
+        "mushroom", "insect", "microscope", "abstract texture",
     )
+    chosen_category = st.selectbox(
+        "نوع الخلفية",
+        list(category_labels.keys()),
+        key="standalone_commons_bg_category",
+    )
+    if st.button("🔎 عرض الخلفيات", type="primary", key="standalone_commons_search"):
+        st.session_state["standalone_background_search_category"] = chosen_category
+        st.session_state.pop("standalone_background_results", None)
+    active_category = st.session_state.get("standalone_background_search_category", chosen_category)
     try:
-        if "standalone_background_results" not in st.session_state:
-            with st.spinner("جارٍ البحث عن خلفيات مناسبة..."):
-                query = category_labels[active_category].replace('" OR "', " ")
-                query = query.replace('"', "")
-                found = search_commons_backgrounds(query, limit=40)
+        if (
+            "standalone_background_results" not in st.session_state
+            or st.session_state.get("standalone_background_results_category") != active_category
+        ):
+            with st.spinner("جارٍ البحث عن صور مناسبة..."):
+                found = search_commons_backgrounds(category_labels[active_category], limit=50)
                 filtered = [
                     item for item in found
                     if not any(term in item["title"].lower() for term in excluded_terms)
                 ]
                 st.session_state["standalone_background_results"] = filtered[:10]
+                st.session_state["standalone_background_results_category"] = active_category
         results = st.session_state["standalone_background_results"]
         if not results:
-            st.info("لم نجد صورًا مناسبة لهذا التصنيف الآن. اختر تصنيفًا آخر واضغط «عرض ١٠ خلفيات».")
+            st.warning("لم نجد صورًا مناسبة في هذا التصنيف حاليًا. جرّب تصنيفًا آخر.")
         else:
-            st.caption(f"عدد الخلفيات المعروضة: {len(results)} من ١٠")
-            cols = st.columns(2)
-            for idx, item in enumerate(results):
-                with cols[idx % 2]:
-                    st.image(item["preview"], caption=item["title"], use_container_width=True)
-                    st.caption("الترخيص: " + item["license"])
-                    if item.get("artist"):
-                        st.caption("المؤلف: " + item["artist"])
-                    if item.get("page"):
-                        st.markdown(f"[المصدر وتفاصيل الصورة]({item['page']})")
-            st.info("هذه مكتبة تصفّح للخلفيات. لتطبيق صورة على الشخص، افتح «استوديو الصور» وارفع صورتك ثم اختر الخلفية المناسبة.")
+            st.caption(f"عدد الصور التي عُثر عليها: {len(results)} / 10")
+            for row_start in range(0, len(results), 2):
+                cols = st.columns(2)
+                for col, item in zip(cols, results[row_start:row_start + 2]):
+                    with col:
+                        st.image(item["preview"], caption=item["title"], use_container_width=True)
+                        if st.button("✅ استخدم هذه الخلفية", key="use_gallery_bg_" + str(results.index(item))):
+                            try:
+                                req = urllib.request.Request(
+                                    item["url"],
+                                    headers={"User-Agent": "SeifPhotoStudio/1.0"},
+                                )
+                                with urllib.request.urlopen(req, timeout=20) as response:
+                                    bg_image = load_image(io.BytesIO(response.read())).convert("RGB")
+                                st.session_state["selected_online_background"] = bg_image
+                                st.session_state["selected_online_background_title"] = item["title"]
+                                st.session_state["studio_background_choice"] = "خلفية من المكتبة"
+                                st.session_state["sidebar_page"] = "استوديو الصور"
+                                st.rerun()
+                            except Exception as exc:
+                                st.error(f"تعذّر تجهيز الخلفية: {exc}")
+                        st.caption("الترخيص: " + item["license"])
+                        if item.get("page"):
+                            st.markdown(f"[المصدر والترخيص]({item['page']})")
+            st.info("ملاحظة: اختر «استخدم هذه الخلفية» أسفل الصورة. سيحتفظ الموقع بالصورة التي رفعتها وينقلك للاستوديو.")
     except Exception as exc:
-        st.error(f"تعذّر تحميل الصور من مكتبة الإنترنت: {exc}")
-        st.info("تحقق من اتصال التطبيق بالإنترنت ثم جرّب مرة أخرى.")
+        st.error(f"تعذّر تحميل مكتبة الخلفيات من الإنترنت: {exc}")
+        st.info("تحقق من اتصال التطبيق بالإنترنت ثم حاول مجددًا.")
     st.stop()
 
 if page == "مكتبتي":
@@ -220,7 +240,22 @@ uploaded = st.file_uploader(
     key="main_photo_upload",
 )
 
-if uploaded is None:
+if uploaded is not None:
+    st.session_state["saved_main_photo_bytes"] = uploaded.getvalue()
+    st.session_state["saved_main_photo_name"] = uploaded.name
+elif st.session_state.get("saved_main_photo_bytes") is not None:
+    uploaded = None
+
+if uploaded is None and st.session_state.get("saved_main_photo_bytes") is not None:
+    try:
+        original = load_image(io.BytesIO(st.session_state["saved_main_photo_bytes"]))
+        original_name = st.session_state.get("saved_main_photo_name", "photo.png")
+    except Exception:
+        original = None
+else:
+    original = None
+
+if uploaded is None and original is None:
     st.markdown("### مرحبًا بك في استوديو الصور")
     st.write(
         "ارفع صورة للبدء. حافظ على الصورة الأصلية "
@@ -228,13 +263,15 @@ if uploaded is None:
     )
     st.stop()
 
-try:
-    original = load_image(io.BytesIO(uploaded.getvalue()))
-except Exception as exc:
-    st.error(f"تعذّر فتح الصورة: {exc}")
-    st.stop()
+if uploaded is not None:
+    try:
+        original = load_image(io.BytesIO(uploaded.getvalue()))
+        original_name = uploaded.name
+    except Exception as exc:
+        st.error(f"تعذّر فتح الصورة: {exc}")
+        st.stop()
 
-st.success(f"تم تحميل الصورة: {uploaded.name}")
+st.success(f"تم تحميل الصورة: {original_name}")
 
 if st.button("📥 حفظ الصورة الأصلية في مكتبتي", key="save_original_to_library"):
     add_to_library(original, f"original_{uploaded.name.rsplit('.', 1)[0]}.png", "PNG")
@@ -339,8 +376,9 @@ else:
     background_choice = st.radio(
         "اختر نوع الخلفية",
         ["أبيض", "رمادي فاتح", "رمادي داكن",
-         "خلفية متدرجة", "صورة من جهازي", "📚 مكتبة خلفيات الإنترنت"],
+         "خلفية متدرجة", "صورة من جهازي", "خلفية من المكتبة", "📚 مكتبة خلفيات الإنترنت"],
         horizontal=True,
+        key="studio_background_choice",
     )
 
     background_colors = {
@@ -415,6 +453,17 @@ else:
             color2 = st.color_picker(
                 "اللون الثاني", "#D9DDE3"
             )
+    elif background_choice == "خلفية من المكتبة":
+        custom_background = st.session_state.get("selected_online_background")
+        if custom_background is not None:
+            st.image(
+                custom_background,
+                caption=st.session_state.get("selected_online_background_title", "الخلفية المختارة"),
+                width="stretch",
+            )
+            st.success("الخلفية المختارة جاهزة. اضغط «معالجة الصورة» لتطبيقها.")
+        else:
+            st.info("افتح مكتبة الخلفيات واختر صورة أولًا.")
     elif background_choice == "صورة من جهازي":
         bg_upload = st.file_uploader(
             "اختر صورة الخلفية",
