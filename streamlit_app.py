@@ -1,265 +1,294 @@
 from __future__ import annotations
-
-import io
-import hashlib
-from typing import Optional
-
+import io, hashlib, json, base64
+from pathlib import Path
 import numpy as np
 import streamlit as st
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps, ImageDraw
 
 st.set_page_config(page_title="SEIF PHOTO STUDIO PRO MAX", page_icon="📸", layout="wide")
-
 st.markdown("""
 <style>
-.block-container {padding-top:1.2rem; padding-bottom:2rem; max-width:1500px;}
-.hero {padding:1.1rem 1.4rem; border-radius:18px; background:linear-gradient(120deg,#171923,#34384a); color:#fff; margin-bottom:1rem;}
-.hero h1 {margin:0;font-size:2rem;}
-.hero p {margin:.45rem 0 0 0;color:#e2e4eb;}
-div[data-testid="stButton"] button, div[data-testid="stDownloadButton"] button {border-radius:10px; min-height:2.6rem;}
-.small-note {color:#777;font-size:.9rem;}
+.block-container{padding-top:1rem;max-width:1600px}
+.hero{padding:1.2rem 1.5rem;border-radius:18px;background:linear-gradient(120deg,#111827,#41465a);color:#fff;margin-bottom:1rem}
+.hero h1{margin:0;font-size:2rem}.hero p{margin:.45rem 0 0;color:#e4e7ef}
+div[data-testid="stButton"] button,div[data-testid="stDownloadButton"] button{border-radius:10px;min-height:2.55rem}
+section[data-testid="stSidebar"]{border-right:1px solid #ddd}
 </style>
-<div class="hero">
-<h1>📸 SEIF PHOTO STUDIO PRO MAX</h1>
-<p>تغيير الخلفيات • الصور الرسمية • Fond neutre • تعديل الإضاءة • تنزيل سريع</p>
-</div>
-""", unsafe_allow_html=True)
+<div class="hero"><h1>📸 SEIF PHOTO STUDIO PRO MAX</h1><p>استوديو الصور • مكتبة الخلفيات • الصور الرسمية • سجل المشاريع</p></div>
+""",unsafe_allow_html=True)
 
-MODEL_OPTIONS = {
-    "BirefNet Portrait — جودة أعلى للبورتريه": "birefnet-portrait",
-    "U²-Net Human Seg — الأشخاص": "u2net_human_seg",
-    "U²-Net — عام": "u2net",
-}
-
-NEUTRAL_COLORS = {
-    "Blanc pur / أبيض": "#FFFFFF",
-    "Gris clair / رمادي فاتح": "#D9D9D9",
-    "Gris moyen / رمادي": "#92969C",
-    "Gris foncé / رمادي داكن": "#50545B",
-    "Beige / بيج": "#D9C5A3",
-    "Ivoire / عاجي": "#F2EBDD",
-    "Taupe / تاوب": "#8B8178",
-    "Noir / أسود": "#202124",
-    "Bleu doux / أزرق هادئ": "#AFC5D6",
-    "Vert sauge / أخضر هادئ": "#B8C5B1",
-}
+ROOT=Path(__file__).parent
+BG_ROOT=ROOT/"backgrounds"
+PROJECTS=ROOT/"saved_projects"
+MODEL_OPTIONS={"BirefNet Portrait — بورتريه":"birefnet-portrait","U²-Net Human Seg — أشخاص":"u2net_human_seg","U²-Net — عام":"u2net"}
+NEUTRAL={"أبيض نقي":"#FFFFFF","رمادي فاتح":"#D9D9D9","رمادي متوسط":"#92969C","رمادي داكن":"#50545B","بيج":"#D9C5A3","عاجي":"#F2EBDD","تاوب":"#8B8178","أسود":"#202124","أزرق هادئ":"#AFC5D6","أخضر sage":"#B8C5B1"}
+CATEGORIES={"Fond neutre":["neutral","gray","white"],"أعراس":["wedding"],"تقليدي":["traditional"],"فاخر":["luxury"],"طبيعة":["nature"]}
+# Direct image URLs are optional online examples. Local files are preferred for reliable production use.
+ONLINE_BACKGROUNDS=[
+("قاعة أعراس ذهبية","أعراس","https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=88"),
+("ديكور زفاف أنيق","أعراس","https://images.unsplash.com/photo-1519225421980-888cb3e8ba2b?auto=format&fit=crop&w=1800&q=88"),
+("حفل زفاف خارجي","أعراس","https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=1800&q=88"),
+("ورود وديكور زفاف","أعراس","https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1800&q=88"),
+("ممر زفاف","أعراس","https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?auto=format&fit=crop&w=1800&q=88"),
+("طبيعة خضراء","طبيعة","https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1800&q=88"),
+("حديقة مضيئة","طبيعة","https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=1800&q=88"),
+("غابة هادئة","طبيعة","https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1800&q=88"),
+("ديكور فاخر","فاخر","https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1800&q=88"),
+("صالون أنيق","فاخر","https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1800&q=88"),
+("جدار محايد","Fond neutre","https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1800&q=88"),
+("ديكور بيج","Fond neutre","https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1800&q=88"),
+]
+# Add the remaining library slots as clear prompts for the user to add licensed photos locally;
+# never pretend placeholder slots are real photos.
+LIBRARY_TARGETS={"Fond neutre":10,"أعراس":20,"تقليدي":15,"فاخر":15,"طبيعة":10}
 
 @st.cache_resource(show_spinner=False)
-def get_rembg_session(model_name):
+def get_session(model):
     from rembg import new_session
-    return new_session(model_name)
+    return new_session(model)
 
-@st.cache_data(show_spinner=False, max_entries=8)
-def remove_background_cached(image_bytes: bytes, model_name: str) -> bytes:
+@st.cache_data(show_spinner=False,max_entries=10)
+def cutout_cached(raw,model):
     from rembg import remove
-    source = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-    result = remove(source, session=get_rembg_session(model_name),
-                    alpha_matting=True,
-                    alpha_matting_foreground_threshold=240,
-                    alpha_matting_background_threshold=10,
-                    alpha_matting_erode_size=10)
-    out = io.BytesIO()
-    result.save(out, format="PNG", optimize=True)
-    return out.getvalue()
+    im=ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGBA")
+    # Alpha matting improves edge detail but can be costly on low-memory hosts.
+    result=remove(im,session=get_session(model),alpha_matting=True,alpha_matting_foreground_threshold=240,alpha_matting_background_threshold=10,alpha_matting_erode_size=10)
+    out=io.BytesIO(); result.save(out,format="PNG",optimize=True); return out.getvalue()
 
-def open_image(data: bytes) -> Image.Image:
-    im = Image.open(io.BytesIO(data))
-    im = ImageOps.exif_transpose(im)
-    if im.mode not in ("RGB", "RGBA"):
-        im = im.convert("RGBA" if "transparency" in im.info else "RGB")
-    return im
+@st.cache_data(show_spinner=False,max_entries=12)
+def download_online_image(url):
+    import requests
+    response=requests.get(url,timeout=25,headers={"User-Agent":"SEIF-PHOTO-STUDIO/1.0"})
+    response.raise_for_status()
+    return response.content
 
-def make_background(size, color_hex: str, gradient: bool = True) -> Image.Image:
-    w, h = size
-    rgb = tuple(int(color_hex[i:i+2], 16) for i in (1, 3, 5))
-    if not gradient:
-        return Image.new("RGB", (w, h), rgb)
-    # Subtle studio gradient, brighter near the upper center.
-    y, x = np.mgrid[0:h, 0:w]
-    nx = (x - w * 0.5) / max(w * 0.75, 1)
-    ny = (y - h * 0.35) / max(h * 0.8, 1)
-    light = np.clip(1.07 - 0.16 * (nx * nx + ny * ny), 0.82, 1.07)
-    arr = np.zeros((h, w, 3), dtype=np.uint8)
-    for c in range(3):
-        arr[:, :, c] = np.clip(rgb[c] * light, 0, 255).astype(np.uint8)
-    return Image.fromarray(arr, "RGB")
+def pil_open(data):
+    return ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGBA")
 
-def composite_subject(subject: Image.Image, bg: Image.Image, scale: float, x_percent: int, y_percent: int, rotation: float) -> Image.Image:
-    subject = subject.convert("RGBA")
-    bg = bg.convert("RGBA")
-    if rotation:
-        subject = subject.rotate(rotation, expand=True, resample=Image.Resampling.BICUBIC)
-    target_h = max(1, int(bg.height * 0.78 * scale))
-    ratio = target_h / max(subject.height, 1)
-    target_w = max(1, int(subject.width * ratio))
-    subject = subject.resize((target_w, target_h), Image.Resampling.LANCZOS)
-    x = int((bg.width - target_w) * x_percent / 100)
-    y = int((bg.height - target_h) * y_percent / 100)
-    layer = Image.new("RGBA", bg.size, (0, 0, 0, 0))
-    layer.alpha_composite(subject, (x, y))
-    return Image.alpha_composite(bg, layer).convert("RGB")
+def background_color(size,hex_color,gradient=True):
+    w,h=size; rgb=tuple(int(hex_color[i:i+2],16) for i in (1,3,5))
+    if not gradient:return Image.new("RGB",size,rgb)
+    y,x=np.mgrid[0:h,0:w]; nx=(x-w*.5)/max(w*.75,1); ny=(y-h*.35)/max(h*.8,1)
+    light=np.clip(1.07-.16*(nx*nx+ny*ny),.82,1.07); a=np.zeros((h,w,3),dtype=np.uint8)
+    for i in range(3):a[:,:,i]=np.clip(rgb[i]*light,0,255).astype("uint8")
+    return Image.fromarray(a,"RGB")
 
-def enhance_image(im: Image.Image, brightness: float, contrast: float, saturation: float, sharpness: float) -> Image.Image:
-    im = ImageEnhance.Brightness(im).enhance(brightness)
-    im = ImageEnhance.Contrast(im).enhance(contrast)
-    im = ImageEnhance.Color(im).enhance(saturation)
-    im = ImageEnhance.Sharpness(im).enhance(sharpness)
-    return im
+def composite(subject,bg,scale=1,x=50,y=13,angle=0):
+    subject=subject.convert("RGBA"); bg=bg.convert("RGBA")
+    if angle:subject=subject.rotate(angle,expand=True,resample=Image.Resampling.BICUBIC)
+    th=max(1,int(bg.height*.78*scale)); tw=max(1,int(subject.width*th/max(subject.height,1)))
+    subject=subject.resize((tw,th),Image.Resampling.LANCZOS)
+    layer=Image.new("RGBA",bg.size,(0,0,0,0))
+    # Position uses center point and keeps subject from being lost entirely.
+    px=int((bg.width-tw)*x/100); py=int((bg.height-th)*y/100)
+    layer.alpha_composite(subject,(px,py))
+    return Image.alpha_composite(bg,layer).convert("RGB")
 
-if "original_bytes" not in st.session_state:
-    st.session_state.original_bytes = None
-if "cutout_bytes" not in st.session_state:
-    st.session_state.cutout_bytes = None
-if "last_result" not in st.session_state:
-    st.session_state.last_result = None
-if "last_result_key" not in st.session_state:
-    st.session_state.last_result_key = None
-if "history" not in st.session_state:
-    st.session_state.history = []
+def enhance(im,b,c,s,sh):
+    im=ImageEnhance.Brightness(im).enhance(b); im=ImageEnhance.Contrast(im).enhance(c)
+    im=ImageEnhance.Color(im).enhance(s); return ImageEnhance.Sharpness(im).enhance(sh)
+
+def bytes_png(im):
+    b=io.BytesIO();im.save(b,format="PNG",optimize=True);return b.getvalue()
+def bytes_jpg(im):
+    b=io.BytesIO();im.convert("RGB").save(b,format="JPEG",quality=96,optimize=True,subsampling=0);return b.getvalue()
+
+def local_backgrounds(category):
+    results=[]
+    for folder in CATEGORIES[category]:
+        p=BG_ROOT/folder
+        if p.exists():
+            for f in sorted(p.iterdir()):
+                if f.suffix.lower() in (".jpg",".jpeg",".png",".webp"):results.append((f.stem,f))
+    return results
+
+def official_crop(im,preset):
+    # Standard output proportions; exact requirements vary by country/institution.
+    sizes={"3 × 4 cm":(3,4),"4 × 6 cm":(4,6),"5 × 7 cm":(5,7),"Square 1:1":(1,1),"Passport portrait 35:45":(35,45)}
+    rw,rh=sizes[preset]; target_ratio=rw/rh
+    w,h=im.size; ratio=w/h
+    if ratio>target_ratio:
+        nw=int(h*target_ratio); left=(w-nw)//2; im=im.crop((left,0,left+nw,h))
+    else:
+        nh=int(w/target_ratio); top=max(0,int((h-nh)*.25)); im=im.crop((0,top,w,min(h,top+nh)))
+    return im.resize((int(rw*300/2.54),int(rh*300/2.54)),Image.Resampling.LANCZOS) if "cm" in preset else im
+
+for k,v in [("original",None),("cutout",None),("history",[]),("projects",{}),("lastkey",None),("lastpng",None)]:
+    if k not in st.session_state:st.session_state[k]=v
 
 with st.sidebar:
-    st.header("⚙️ أدوات الاستوديو")
-    uploaded = st.file_uploader("1. ارفع الصورة", type=["jpg", "jpeg", "png", "webp"])
-    if uploaded is not None:
-        incoming = uploaded.getvalue()
-        digest = hashlib.sha256(incoming).hexdigest()
-        if st.session_state.get("image_digest") != digest:
-            st.session_state.original_bytes = incoming
-            st.session_state.image_digest = digest
-            st.session_state.cutout_bytes = None
-            st.session_state.last_result = None
-            st.session_state.last_result_key = None
-    model_label = st.selectbox("محرك قص الخلفية", list(MODEL_OPTIONS.keys()), index=0)
-    model_name = MODEL_OPTIONS[model_label]
-    st.caption("BirefNet Portrait قد يعطي نتائج أفضل للبورتريه، لكنه أثقل وقد يستغرق وقتًا أطول.")
+    st.markdown("### 🧭 التنقّل")
+    page=st.radio("القائمة الرئيسية",["Home","استوديو الصور","المكتبة","مشاريعي / السجل","من نحن"],label_visibility="collapsed")
     st.divider()
-    st.subheader("Fond neutre")
-    selected_color_name = st.selectbox("لون الخلفية", list(NEUTRAL_COLORS.keys()))
-    selected_color = NEUTRAL_COLORS[selected_color_name]
-    gradient = st.toggle("تدرّج استوديو ناعم", value=True)
-    custom_bg_file = st.file_uploader("أو ارفع خلفية خاصة", type=["jpg", "jpeg", "png", "webp"], key="custom_bg")
-    st.divider()
-    st.subheader("تكوين الصورة")
-    scale = st.slider("حجم الشخص", 0.45, 1.45, 1.0, 0.05)
-    x_percent = st.slider("الموضع الأفقي", 0, 100, 50)
-    y_percent = st.slider("الموضع العمودي", 0, 100, 13)
-    rotation = st.slider("تدوير الصورة (درجة)", -180, 180, 0)
-    st.caption("هذه أدوات التكوين الأولية؛ سحب مقابض الزوايا مباشرة بالفأرة غير مفعّل بعد.")
-    st.divider()
-    st.subheader("تحسين خفيف")
-    brightness = st.slider("السطوع", 0.5, 1.5, 1.0, 0.05)
-    contrast = st.slider("التباين", 0.5, 1.5, 1.0, 0.05)
-    saturation = st.slider("تشبع الألوان", 0.0, 1.8, 1.0, 0.05)
-    sharpness = st.slider("الحدة", 0.5, 2.0, 1.0, 0.1)
-
-if not st.session_state.original_bytes:
-    st.info("ابدأ برفع صورة من القائمة الجانبية. يمكنك تجربة الخلفيات المحايدة بعد رفع الصورة.")
-    st.markdown("### مميزات النسخة الحالية")
-    c1, c2, c3 = st.columns(3)
-    c1.markdown("**🎨 Fond neutre**\n\nألوان بيضاء ورمادية وبيج وعاجية مع تدرج ناعم.")
-    c2.markdown("**✂️ إزالة الخلفية**\n\nقص الشخص آليًا باستخدام نموذج rembg عند توفره.")
-    c3.markdown("**⚡ تنزيل سريع**\n\nتخزين الصورة النهائية الجاهزة لتجنب إعادة المعالجة عند التنزيل.")
-    st.stop()
-
-try:
-    original = open_image(st.session_state.original_bytes)
-except Exception as exc:
-    st.error(f"تعذّر فتح الصورة. جرّب ملفًا آخر. التفاصيل: {exc}")
-    st.stop()
-
-col_a, col_b = st.columns([1, 1], gap="large")
-with col_a:
-    st.subheader("الصورة الأصلية")
-    st.image(original, use_container_width=True)
-
-with col_b:
-    st.subheader("النتيجة النهائية")
-    remove_clicked = st.button("✂️ إزالة الخلفية بالذكاء الاصطناعي", type="primary", use_container_width=True)
-    if remove_clicked:
-        try:
-            with st.spinner("يجري قصّ الشخص... قد تستغرق أول مرة وقتًا أطول لتحميل النموذج."):
-                st.session_state.cutout_bytes = remove_background_cached(st.session_state.original_bytes, model_name)
-                st.session_state.last_result = None
-                st.session_state.last_result_key = None
-            st.success("تم تجهيز قصّ الشخص. اختر الخلفية ثم نزّل النتيجة.")
-        except Exception as exc:
-            st.error("لم تنجح إزالة الخلفية. تأكد من تثبيت rembg/onnxruntime أو جرّب مجددًا.")
-            st.exception(exc)
-
-    if st.session_state.cutout_bytes:
-        try:
-            subject = open_image(st.session_state.cutout_bytes).convert("RGBA")
-            if custom_bg_file is not None:
-                bg = open_image(custom_bg_file.getvalue()).convert("RGB").resize(original.size, Image.Resampling.LANCZOS)
-            else:
-                bg = make_background(original.size, selected_color, gradient)
-            result = composite_subject(subject, bg, scale, x_percent, y_percent, rotation)
-            result = enhance_image(result, brightness, contrast, saturation, sharpness)
-            key_material = "|".join([hashlib.sha256(st.session_state.cutout_bytes).hexdigest(), selected_color, str(gradient), str(scale), str(x_percent), str(y_percent), str(rotation), str(brightness), str(contrast), str(saturation), str(sharpness), hashlib.sha256(custom_bg_file.getvalue()).hexdigest() if custom_bg_file else "default"])
-            result_key = hashlib.sha256(key_material.encode()).hexdigest()
-            # Prepare final bytes once per unique set of settings; download does not rerun AI.
-            if st.session_state.last_result_key != result_key:
-                buf = io.BytesIO()
-                result.save(buf, format="JPEG", quality=95, optimize=True, subsampling=0)
-                st.session_state.last_result = buf.getvalue()
-                st.session_state.last_result_key = result_key
-            st.image(result, use_container_width=True)
-
-            # Keep a short, deduplicated history of finished previews.
-            if not st.session_state.history or st.session_state.history[-1]["key"] != result_key:
-                st.session_state.history.append({
-                    "key": result_key,
-                    "bytes": st.session_state.last_result,
-                    "label": f"تعديل {len(st.session_state.history) + 1}"
-                })
-                st.session_state.history = st.session_state.history[-20:]
-
-            import base64
-            preview64 = base64.b64encode(save_preview(result)).decode("ascii") if False else base64.b64encode(st.session_state.last_result).decode("ascii")
-            st.components.v1.html(f"""
-            <div style="font:14px Arial,sans-serif;color:#777;margin-bottom:6px">🔎 تكبير/تصغير بعجلة الفأرة، واسحب الصورة لتحريك المعاينة</div>
-            <div id="zoom-stage" style="height:500px;overflow:hidden;border:1px solid #aaa;border-radius:12px;background:#222;display:flex;align-items:center;justify-content:center;cursor:grab;touch-action:none">
-              <img id="zoom-image" src="data:image/jpeg;base64,{preview64}" style="max-width:90%;max-height:90%;object-fit:contain;transform:translate(0px,0px) scale(1);transform-origin:center;pointer-events:none;user-select:none">
-            </div>
-            <div style="margin-top:8px"><button onclick="window.resetZoomView()">إعادة العرض</button> <span id="zoom-value">100%</span></div>
-            <script>(function(){{
-              const s=document.getElementById('zoom-stage'),i=document.getElementById('zoom-image'),v=document.getElementById('zoom-value');
-              let z=1,x=0,y=0,drag=false,sx=0,sy=0,ox=0,oy=0;
-              function draw(){{i.style.transform='translate('+x+'px,'+y+'px) scale('+z+')';v.textContent=Math.round(z*100)+'%';}}
-              s.addEventListener('wheel',e=>{{e.preventDefault();let r=s.getBoundingClientRect(),px=e.clientX-r.left-r.width/2,py=e.clientY-r.top-r.height/2,old=z;z=Math.max(.5,Math.min(5,z*(e.deltaY<0?1.12:.89)));x=px-(px-x)*z/old;y=py-(py-y)*z/old;draw();}},{{passive:false}});
-              s.addEventListener('pointerdown',e=>{{drag=true;sx=e.clientX;sy=e.clientY;ox=x;oy=y;s.setPointerCapture(e.pointerId);s.style.cursor='grabbing';}});
-              s.addEventListener('pointermove',e=>{{if(drag){{x=ox+e.clientX-sx;y=oy+e.clientY-sy;draw();}}}});
-              s.addEventListener('pointerup',()=>{{drag=false;s.style.cursor='grab';}});
-              window.resetZoomView=()=>{{z=1;x=0;y=0;draw();}};
-            }})();</script>
-            """, height=570, scrolling=False)
-
-            if st.session_state.history:
-                with st.expander("🕘 سجل آخر 20 نتيجة"):
-                    selected_history = st.selectbox("اختر نتيجة محفوظة", range(len(st.session_state.history)),
-                        format_func=lambda i: st.session_state.history[i]["label"], key="history_choice")
-                    st.image(st.session_state.history[selected_history]["bytes"], caption="معاينة من السجل", use_container_width=True)
-                    st.download_button("تنزيل النتيجة المختارة من السجل",
-                        data=st.session_state.history[selected_history]["bytes"],
-                        file_name="seif_photo_history.png", mime="image/png")
-
-            d1, d2 = st.columns(2)
-            with d1:
-                st.download_button("⬇️ تنزيل JPEG عالي الجودة", data=st.session_state.last_result, file_name="seif_photo_studio_result.jpg", mime="image/jpeg", use_container_width=True)
-            with d2:
-                png_buf = io.BytesIO()
-                result.save(png_buf, format="PNG", optimize=True)
-                st.download_button("⬇️ تنزيل PNG", data=png_buf.getvalue(), file_name="seif_photo_studio_result.png", mime="image/png", use_container_width=True)
-            st.caption("التكبير بالفأرة مخصص للمعاينة. التنزيل يحافظ على دقة الصورة الأصلية ولا يعيد تشغيل نموذج القص.")
-        except Exception as exc:
-            st.error("تعذّر تركيب الصورة. جرّب إعدادات أبسط أو صورة أخرى.")
-            st.exception(exc)
+    if page=="استوديو الصور":
+        uploaded=st.file_uploader("ارفع صورة",type=["jpg","jpeg","png","webp"])
+        if uploaded:
+            raw=uploaded.getvalue(); digest=hashlib.sha256(raw).hexdigest()
+            if st.session_state.get("digest")!=digest:
+                st.session_state.original=raw;st.session_state.digest=digest;st.session_state.cutout=None;st.session_state.lastkey=None
+        model_label=st.selectbox("محرك القص",list(MODEL_OPTIONS.keys()),index=0)
+        model=MODEL_OPTIONS[model_label]
+        st.caption("BirefNet قد يكون أدق في بعض صور البورتريه، لكنه يحتاج ذاكرة ووقتًا أكثر.")
+        st.divider();st.subheader("الخلفية")
+        category=st.selectbox("قسم المكتبة",list(CATEGORIES.keys()))
+        local=local_backgrounds(category)
+        online=[x for x in ONLINE_BACKGROUNDS if x[1]==category]
+        selected_bg=None
+        names=["لون استوديو محايد"]+[f"{x[0]} (صورة عبر الإنترنت)" for x in online]+[f"{name} (محلي)" for name,_ in local]
+        selected_name=st.selectbox("اختر خلفية",names)
+        if selected_name.startswith("لون استوديو"):
+            selected_bg=None
+        elif "(صورة عبر الإنترنت)" in selected_name:
+            selected_bg=next(x for x in online if x[0] in selected_name)
+        else:
+            selected_bg=next((("local",str(p)) for name,p in local if f"{name} (محلي)"==selected_name),None)
+        color_name=st.selectbox("لون Fond neutre",list(NEUTRAL.keys()))
+        color=NEUTRAL[color_name];gradient=st.toggle("تدرّج ناعم",True)
+        custom=st.file_uploader("أو ارفع خلفية خاصة",type=["jpg","jpeg","png","webp"],key="custom")
+        st.divider();st.subheader("التحرير")
+        zoom=st.slider("تكبير/تصغير الشخص",.3,1.7,1.0,.05)
+        rotate=st.slider("زاوية التدوير", -180,180,0)
+        st.caption("يمكنك أيضًا استعمال عجلة الفأرة والسحب داخل مساحة المعاينة، ثم تثبيت التعديل بزر تطبيق التحويل.")
+        st.divider();st.subheader("صور رسمية")
+        preset=st.selectbox("مقاس الصورة",["بدون قص خاص","3 × 4 cm","4 × 6 cm","5 × 7 cm","Square 1:1","Passport portrait 35:45"])
+        st.divider();st.subheader("تحسين خفيف")
+        bright=st.slider("السطوع",.5,1.5,1.0,.05);contrast=st.slider("التباين",.5,1.5,1.0,.05)
+        sat=st.slider("تشبع الألوان",0.0,1.8,1.0,.05);sharp=st.slider("الحدة",.5,2.0,1.0,.1)
     else:
-        st.info("اضغط «إزالة الخلفية بالذكاء الاصطناعي» لبدء التحرير.")
+        uploaded=None
+
+if page=="Home":
+    st.title("مرحبًا بك في SEIF PHOTO STUDIO PRO MAX")
+    st.write("استوديو صور لتغيير الخلفيات، إعداد الصور الرسمية، تحسين الحواف، وتنظيم المشاريع.")
+    a,b,c=st.columns(3)
+    a.markdown("### ✂️ قص ذكي\nإزالة الخلفية واختيار محرك قص.")
+    b.markdown("### 🖼️ مكتبة\nخلفيات محايدة وأعراس وفخامة وطبيعة.")
+    c.markdown("### 🕘 مشاريع\nسجل نتائج يمكن معاينتها وتنزيلها.")
+    st.info("اختر «استوديو الصور» من القائمة اليمنى لرفع صورة وبدء التعديل.")
+    st.stop()
+if page=="المكتبة":
+    st.title("🖼️ مكتبة الخلفيات")
+    st.write("يمكنك الاختيار من الصور المتاحة عبر الإنترنت أو إضافة صورك المرخّصة إلى مجلدات المكتبة داخل GitHub.")
+    for cat in CATEGORIES:
+        st.subheader(f"{cat} — الهدف {LIBRARY_TARGETS.get(cat,0)} خلفية")
+        items=[x for x in ONLINE_BACKGROUNDS if x[1]==cat]
+        if items:
+            cols=st.columns(min(3,len(items)))
+            for i,item in enumerate(items):
+                with cols[i%len(cols)]:
+                    try:
+                        data=download_online_image(item[2]); st.image(data,caption=item[0],use_container_width=True)
+                        st.download_button("تنزيل الخلفية",data=data,file_name=f"background_{i+1}.jpg",mime="image/jpeg",key=f"libdl_{cat}_{i}")
+                    except Exception:st.warning(f"تعذر تحميل الصورة الآن: {item[0]}")
+        else:st.caption("لا توجد صور حقيقية مضافة لهذا القسم بعد.")
+        loc=local_backgrounds(cat)
+        if loc:st.caption(f"صورك المحلية: {len(loc)}")
+    st.warning("هذه نسخة أولية للمكتبة: تحتوي على صور خارجية مختارة للمعاينة، وليست مكتبة مكتملة من 80 صورة محلية. يجب استكمال الصور الناقصة قبل اعتبار المكتبة مكتملة.")
+    st.stop()
+if page=="مشاريعي / السجل":
+    st.title("🕘 مشاريعي وسجل النتائج")
+    if not st.session_state.history:st.info("ستظهر هنا النتائج التي تحفظها من الاستوديو في الجلسة الحالية.")
+    else:
+        for i,item in enumerate(reversed(st.session_state.history)):
+            with st.expander(item["label"],expanded=(i==0)):
+                st.image(item["bytes"],use_container_width=True)
+                st.download_button("تنزيل النتيجة",data=item["bytes"],file_name=f"seif_history_{len(st.session_state.history)-i}.png",mime="image/png",key=f"hist_{i}")
+    st.caption("حاليًا السجل داخل جلسة المتصفح. حفظ دائم بين الزيارات يحتاج قاعدة بيانات أو ملفات مشاريع على مساحة تخزين دائمة.")
+    st.stop()
+if page=="من نحن":
+    st.title("من نحن")
+    st.write("SEIF PHOTO STUDIO PRO MAX — أدوات عملية للمصورين لتجهيز الصور الرسمية وتغيير الخلفيات.")
+    st.markdown("**الخدمات:** صور رسمية • أعراس • بورتريه • تعديل خلفيات • تجهيز الصور للطباعة")
+    st.markdown("**الموقع:** VG9M+PVX, Rue Taher Sfar, Kalâa Kebira, Tunisia")
+    st.markdown("**الهاتف:** 97262953")
+    st.markdown("**البريد:** seifjaballah77@gmail.com")
+    st.stop()
+
+st.title("🎛️ استوديو الصور")
+if not st.session_state.original:
+    st.info("ارفع صورة من القائمة الجانبية لبدء العمل.")
+    st.stop()
+original=pil_open(st.session_state.original)
+left,right=st.columns(2,gap="large")
+with left:
+    st.subheader("قبل")
+    st.image(original,use_container_width=True)
+with right:
+    st.subheader("بعد")
+    if st.button("✂️ إزالة الخلفية",type="primary",use_container_width=True):
+        try:
+            with st.spinner("يجري قصّ الشخص وتحسين الحواف..."):
+                st.session_state.cutout=cutout_cached(st.session_state.original,model)
+            st.success("اكتمل القص. راجع الحواف، ثم اختر الخلفية.")
+        except Exception as e:st.error(f"فشل القص: {e}")
+    if st.session_state.cutout:
+        subject=pil_open(st.session_state.cutout)
+        if selected_bg and selected_bg[0]!="local":
+            try:bg=pil_open(download_online_image(selected_bg[2])).convert("RGB").resize(original.size,Image.Resampling.LANCZOS)
+            except Exception:bg=background_color(original.size,color,gradient)
+        elif selected_bg and selected_bg[0]=="local":
+            try:bg=pil_open(Path(selected_bg[1]).read_bytes()).convert("RGB").resize(original.size,Image.Resampling.LANCZOS)
+            except Exception:bg=background_color(original.size,color,gradient)
+        elif custom:bg=pil_open(custom.getvalue()).convert("RGB").resize(original.size,Image.Resampling.LANCZOS)
+        else:bg=background_color(original.size,color,gradient)
+        result=composite(subject,bg,zoom,50,13,rotate)
+        result=enhance(result,bright,contrast,sat,sharp)
+        if preset!="بدون قص خاص":result=official_crop(result,preset)
+        result_png=bytes_png(result)
+        result_key=hashlib.sha256(result_png).hexdigest()
+        st.image(result,use_container_width=True)
+        # Keep unique result history within this session.
+        if not st.session_state.history or st.session_state.history[-1]["key"]!=result_key:
+            st.session_state.history.append({"key":result_key,"bytes":result_png,"label":f"نتيجة {len(st.session_state.history)+1}"})
+            st.session_state.history=st.session_state.history[-20:]
+        # Before/after comparison with a draggable range control.
+        st.subheader("مقارنة قبل / بعد")
+        compare=st.slider("حرّك المؤشر لمقارنة الصورة الأصلية والنتيجة",0,100,50,key="compare")
+        ca,cb=st.columns(2)
+        with ca:st.image(original.resize(result.size,Image.Resampling.LANCZOS),caption=f"الأصل — {100-compare}%",use_container_width=True)
+        with cb:st.image(result,caption=f"النتيجة — {compare}%",use_container_width=True)
+        # Brush correction: paint regions to mark alpha erase/restore. This is a dedicated mask canvas.
+        st.subheader("🖌️ فرشاة تصحيح القص")
+        st.caption("ارسم بالأحمر على أجزاء الخلفية المتبقية لإخفائها، وبالأخضر على أجزاء الشخص التي تريد استعادتها. ثم طبّق التصحيح.")
+        try:
+            from streamlit_drawable_canvas import st_canvas
+            c1,c2=st.columns(2)
+            with c1:
+                brush_mode=st.radio("نوع الفرشاة",["محو الخلفية","استعادة الشخص"],horizontal=True,key="brushmode")
+                brush_color="#FF0000" if brush_mode=="محو الخلفية" else "#00FF00"
+                brush_size=st.slider("حجم الفرشاة",5,80,24,key="brushsize")
+            with c2:
+                st.write("ارسم فوق معاينة القص، ثم اضغط تطبيق.")
+            cutout_for_canvas=subject.copy()
+            cutout_for_canvas.thumbnail((850,850))
+            canvas_result=st_canvas(fill_color="rgba(0,0,0,0)",stroke_width=brush_size,stroke_color=brush_color,background_image=cutout_for_canvas,drawing_mode="freedraw",height=cutout_for_canvas.height,width=cutout_for_canvas.width,key="brush_canvas")
+            if st.button("تطبيق تصحيح الفرشاة"):
+                if canvas_result.image_data is None:st.warning("ارسم بعض الخطوط أولًا.")
+                else:
+                    rgba=np.array(subject.convert("RGBA"))
+                    canvas_arr=np.array(canvas_result.image_data)
+                    # Map canvas stroke marks back to the full-size alpha mask.
+                    mark_red=(canvas_arr[:,:,0]>180)&(canvas_arr[:,:,1]<100)&(canvas_arr[:,:,2]<100)
+                    mark_green=(canvas_arr[:,:,1]>150)&(canvas_arr[:,:,0]<100)&(canvas_arr[:,:,2]<100)
+                    mask_img=Image.fromarray((mark_red.astype("uint8")*255),"L").resize(subject.size,Image.Resampling.NEAREST)
+                    restore_img=Image.fromarray((mark_green.astype("uint8")*255),"L").resize(subject.size,Image.Resampling.NEAREST)
+                    alpha=rgba[:,:,3].copy()
+                    erase=np.array(mask_img)>0; restore=np.array(restore_img)>0
+                    alpha[erase]=0; alpha[restore]=255; rgba[:,:,3]=alpha
+                    st.session_state.cutout=bytes_png(Image.fromarray(rgba,"RGBA"))
+                    st.success("طُبّق تعديل الفرشاة. اضغط إزالة الخلفية فقط إذا أردت إعادة القص من الأصل.")
+                    st.rerun()
+        except ImportError:
+            st.warning("فرشاة التصحيح تحتاج تثبيت streamlit-drawable-canvas؛ أضفها من requirements.txt ثم أعد تشغيل التطبيق.")
+        d1,d2=st.columns(2)
+        with d1:st.download_button("تنزيل JPG عالي الجودة",data=bytes_jpg(result),file_name="seif_photo_studio.jpg",mime="image/jpeg",use_container_width=True)
+        with d2:st.download_button("تنزيل PNG",data=result_png,file_name="seif_photo_studio.png",mime="image/png",use_container_width=True)
+        st.subheader("حفظ المشروع")
+        project_name=st.text_input("اسم المشروع",value="مشروع جديد")
+        if st.button("حفظ في سجل الجلسة"):
+            st.session_state.projects[project_name]={"original":st.session_state.original,"cutout":st.session_state.cutout,"result":result_png,"settings":{"zoom":zoom,"rotation":rotate,"background":color_name,"preset":preset}}
+            st.success("تم حفظ المشروع في جلسة المتصفح الحالية.")
+    else:st.info("اضغط «إزالة الخلفية» لبدء التحرير.")
 
 st.divider()
-st.subheader("ملاحظات")
-st.write("- خلفيات Fond neutre في هذه النسخة تُنشأ محليًا من ألوان استوديو محايدة، ويمكنك رفع صورة خلفية حقيقية من جهازك.")
-st.write("- محرك القص أصبح قابلًا للاختيار بين BirefNet Portrait وU²-Net Human Seg وU²-Net، مع تحسين حواف alpha matting.")
-st.write("- التكبير بعجلة الفأرة والسحب متاحان في نافذة المعاينة؛ هذه الحركة لا تغيّر ملف التصدير نفسه.")
-st.write("- أدوات التدوير والحجم والموضع تعمل حاليًا من عناصر التحكم؛ التدوير والسحب المباشر بمقابض الزوايا بالفأرة يحتاجان إلى مكوّن محرر تفاعلي مستقل.")
+st.caption("ملاحظة: التكبير والتدوير في هذه النسخة يتمان من عناصر التحكم. محرر التحويل الحر بمقابض الماوس وربط سحب/تدوير الصورة بملف التصدير ما زال يحتاج مكوّنًا تفاعليًا مخصصًا.")
