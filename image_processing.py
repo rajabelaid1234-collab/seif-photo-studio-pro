@@ -15,11 +15,10 @@ MAX_SIDE = 3000
 MAX_PIXELS = 25_000_000
 PROJECT_VERSION = 1
 
-# Portrait-focused models first: usually better for people and fine hair.
-# If a model or its optional alpha-matting dependencies fail, remove_background
-# automatically falls back to ordinary rembg removal and then the next model.
+# Prefer lighter models on Streamlit Community Cloud to avoid downloading
+# the ~1 GB BiRefNet portrait model and exhausting app memory/storage.
+# These models still target people and provide a fallback chain.
 MODEL_CHAIN = [
-    "birefnet-portrait",
     "u2net_human_seg",
     "isnet-general-use",
     "u2netp",
