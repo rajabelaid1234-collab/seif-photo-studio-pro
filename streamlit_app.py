@@ -2,10 +2,47 @@
 from __future__ import annotations
 
 import io
+import json
+import urllib.parse
+import urllib.request
 import numpy as np
 import streamlit as st
 from PIL import Image, ImageChops, ImageOps
 from streamlit_drawable_canvas import st_canvas
+
+def search_commons_backgrounds(query, limit=18):
+    """Search Wikimedia Commons for reusable background photos and return license metadata."""
+    params = {
+        "action": "query",
+        "format": "json",
+        "generator": "search",
+        "gsrsearch": f'filetype:bitmap {query}',
+        "gsrnamespace": 6,
+        "gsrlimit": limit,
+        "prop": "imageinfo",
+        "iiprop": "url|extmetadata",
+        "iiurlwidth": 500,
+    }
+    url = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(params)
+    request = urllib.request.Request(url, headers={"User-Agent": "SeifPhotoStudio/1.0 (background gallery)"})
+    with urllib.request.urlopen(request, timeout=12) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    pages = payload.get("query", {}).get("pages", {})
+    results = []
+    for page in sorted(pages.values(), key=lambda p: p.get("title", "")):
+        info = (page.get("imageinfo") or [{}])[0]
+        meta = info.get("extmetadata") or {}
+        license_name = meta.get("LicenseShortName", {}).get("value", "License not listed")
+        artist = meta.get("Artist", {}).get("value", "")
+        results.append({
+            "title": page.get("title", "Background").replace("File:", ""),
+            "preview": info.get("thumburl") or info.get("url"),
+            "url": info.get("url"),
+            "page": info.get("descriptionurl"),
+            "license": license_name,
+            "artist": artist,
+        })
+    return [item for item in results if item.get("url") and item.get("preview")]
 
 from image_processing import (
     load_image,
@@ -245,7 +282,7 @@ else:
     background_choice = st.radio(
         "اختر نوع الخلفية",
         ["أبيض", "رمادي فاتح", "رمادي داكن",
-         "خلفية متدرجة", "صورة من جهازي"],
+         "خلفية متدرجة", "صورة من جهازي", "📚 مكتبة خلفيات الإنترنت"],
         horizontal=True,
     )
 
@@ -256,7 +293,62 @@ else:
     }
 
     custom_background = None
-    if background_choice == "خلفية متدرجة":
+    selected_commons_background = None
+    if background_choice == "📚 مكتبة خلفيات الإنترنت":
+        st.markdown("### 📚 مكتبة خلفيات جاهزة")
+        st.caption("اختر فئة ثم خلفية. الصور تأتي من Wikimedia Commons وتظهر معها معلومات الترخيص والمصدر.")
+        category_labels = {
+            "أعراس وقاعات زفاف": "wedding venue wedding hall interior",
+            "بحر وشواطئ": "seascape beach coastline",
+            "طبيعة وغابات": "forest landscape nature",
+            "حدائق وأزهار": "flower garden botanical",
+            "جبال وشلالات": "mountain waterfall landscape",
+            "مدن ومعالم": "city architecture landscape",
+            "خلفيات استوديو": "photography studio backdrop",
+            "طراز تقليدي تونسي": "Tunisia traditional architecture courtyard",
+            "غروب وشروق": "sunset sunrise landscape",
+            "سماء وسحب": "cloudscape sky landscape",
+        }
+        chosen_category = st.selectbox("تصنيف الخلفيات", list(category_labels.keys()), key="commons_bg_category")
+        try:
+            with st.spinner("جارٍ البحث عن خلفيات مناسبة..."):
+                background_results = search_commons_backgrounds(category_labels[chosen_category])
+            if not background_results:
+                st.info("لم تظهر نتائج لهذه الفئة. جرّب فئة أخرى.")
+            else:
+                selected_commons_background = st.selectbox(
+                    "اختر الخلفية بالاسم",
+                    background_results,
+                    format_func=lambda item: item["title"],
+                    key="commons_bg_selected",
+                )
+                preview_col, details_col = st.columns([1, 1])
+                with preview_col:
+                    st.image(selected_commons_background["preview"], caption=selected_commons_background["title"], use_container_width=True)
+                with details_col:
+                    st.write("**الترخيص:** " + selected_commons_background["license"])
+                    if selected_commons_background.get("artist"):
+                        st.markdown("**المؤلف:** " + selected_commons_background["artist"], unsafe_allow_html=True)
+                    if selected_commons_background.get("page"):
+                        st.markdown(f'[صفحة الصورة والمصدر]({selected_commons_background["page"]})')
+                if st.button("⬇️ تجهيز الخلفية المختارة", key="load_commons_background"):
+                    try:
+                        request = urllib.request.Request(
+                            selected_commons_background["url"],
+                            headers={"User-Agent": "SeifPhotoStudio/1.0"},
+                        )
+                        with urllib.request.urlopen(request, timeout=20) as response:
+                            custom_background = load_image(io.BytesIO(response.read())).convert("RGB")
+                        st.session_state["selected_online_background"] = custom_background
+                        st.session_state["selected_online_background_title"] = selected_commons_background["title"]
+                        st.success("تم تجهيز الخلفية. اضغط «معالجة الصورة» لتطبيقها.")
+                    except Exception as exc:
+                        st.error(f"تعذّر تنزيل الخلفية: {exc}")
+                custom_background = st.session_state.get("selected_online_background")
+        except Exception as exc:
+            st.warning(f"تعذّر الاتصال بمكتبة الخلفيات الآن. تحقق من اتصال الموقع بالإنترنت ثم أعد المحاولة. التفاصيل: {exc}")
+            custom_background = st.session_state.get("selected_online_background")
+    elif background_choice == "خلفية متدرجة":
         col1, col2 = st.columns(2)
         with col1:
             color1 = st.color_picker(
@@ -320,7 +412,7 @@ else:
                     )
                 else:
                     if custom_background is None:
-                        st.error("اختر صورة للخلفية أولًا.")
+                        st.error("اختر صورة للخلفية أولًا، ثم اضغط «تجهيز الخلفية المختارة» إذا كانت من المكتبة.")
                         st.stop()
                     bg = custom_background.resize(
                         cutout.size, Image.Resampling.LANCZOS
