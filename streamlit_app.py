@@ -73,26 +73,36 @@ def add_to_library(image, filename, fmt="PNG"):
 
 if page == "مكتبتي":
     st.header("🗂️ مكتبتي")
-    st.write("احفظ الصور الأصلية والنتائج هنا للوصول إليها خلال جلسة العمل الحالية.")
+    st.write("احفظ أكبر عدد ممكن من الصور والنتائج في مكتبتك أثناء جلسة العمل.")
     library = st.session_state["photo_library"]
     if not library:
         st.info("مكتبتك فارغة الآن. افتح استوديو الصور واحفظ صورة أو نتيجة فيها.")
     else:
-        st.caption(f"عدد الصور المحفوظة: {len(library)}")
+        st.caption(f"عدد الصور المحفوظة حاليًا: {len(library)} — لا يوجد حدّ عددي مفروض داخل التطبيق؛ الحد العملي هو ذاكرة جلسة الاستضافة.")
+        if st.button("🗑️ مسح المكتبة كاملة", key="clear_photo_library"):
+            st.session_state["photo_library"] = []
+            st.rerun()
         for i, item in enumerate(library):
             with st.container(border=True):
-                st.write(f"**{item['filename']}**")
-                st.download_button(
-                    "⬇️ تنزيل",
-                    data=item["data"],
-                    file_name=item["filename"],
-                    mime="image/png" if item["format"] == "PNG" else "image/jpeg",
-                    key=f"library_download_{i}",
-                )
-                if st.button("🗑️ حذف من المكتبة", key=f"library_delete_{i}"):
-                    st.session_state["photo_library"].pop(i)
-                    st.rerun()
-    st.warning("مهم: هذه نسخة أولية من المكتبة تحفظ الصور داخل جلسة Streamlit فقط. لا تعتبر تخزينًا دائمًا؛ التخزين الدائم لكل حساب يحتاج قاعدة بيانات وتخزينًا سحابيًا آمنًا.")
+                col_img, col_actions = st.columns([1, 2])
+                with col_img:
+                    try:
+                        st.image(Image.open(io.BytesIO(item["data"])), caption=item["filename"], use_container_width=True)
+                    except Exception:
+                        st.caption(item["filename"])
+                with col_actions:
+                    st.write(f"**{item['filename']}**")
+                    st.download_button(
+                        "⬇️ تنزيل",
+                        data=item["data"],
+                        file_name=item["filename"],
+                        mime="image/png" if item["format"] == "PNG" else "image/jpeg",
+                        key=f"library_download_{i}",
+                    )
+                    if st.button("🗑️ حذف من المكتبة", key=f"library_delete_{i}"):
+                        st.session_state["photo_library"].pop(i)
+                        st.rerun()
+    st.warning("مهم: المكتبة الحالية تحفظ الصور داخل جلسة Streamlit فقط. لا يوجد حدّ ثابت لعدد الصور في الكود، لكن الصور الكبيرة تستهلك ذاكرة الخادم، وقد تختفي عند انتهاء الجلسة أو إعادة تشغيل التطبيق. لجعلها دائمة عبر تسجيل الدخول نحتاج إلى تخزين سحابي آمن.")
     st.stop()
 
 if page == "حول الاستوديو":
