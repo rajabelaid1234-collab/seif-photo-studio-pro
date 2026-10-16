@@ -21,8 +21,9 @@ def test_remove_background_returns_transparency(monkeypatch):
 
     def fake_remove(source, session=None, **kwargs):
         result = source.convert("RGBA")
-        result.putalpha(Image.new("L", result.size, 255))
-        result.getchannel("A").putpixel((0, 0), 0)
+        alpha = Image.new("L", result.size, 255)
+        alpha.putpixel((0, 0), 0)
+        result.putalpha(alpha)
         return result
 
     fake.remove = fake_remove
