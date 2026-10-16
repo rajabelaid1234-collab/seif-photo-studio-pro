@@ -12,7 +12,13 @@ st.markdown("""
 .hero{padding:1.2rem 1.5rem;border-radius:18px;background:linear-gradient(120deg,#111827,#41465a);color:#fff;margin-bottom:1rem}
 .hero h1{margin:0;font-size:2rem}.hero p{margin:.45rem 0 0;color:#e4e7ef}
 div[data-testid="stButton"] button,div[data-testid="stDownloadButton"] button{border-radius:10px;min-height:2.55rem}
-section[data-testid="stSidebar"]{border-left:1px solid #ddd;border-right:0;order:2} div[data-testid="stAppViewContainer"] > .main{order:1}
+section[data-testid="stSidebar"]{border-left:1px solid #ddd;border-right:0;order:2;min-width:285px!important;width:285px!important} div[data-testid="stAppViewContainer"] > .main{order:1}
+/* Medium-sized, readable navigation */
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3{font-size:1.25rem!important;margin-bottom:.8rem!important}
+section[data-testid="stSidebar"] div[role="radiogroup"]{gap:.45rem!important}
+section[data-testid="stSidebar"] div[role="radiogroup"] label{padding:.55rem .65rem!important;min-height:2.7rem!important;border-radius:9px!important}
+section[data-testid="stSidebar"] div[role="radiogroup"] label p{font-size:1.05rem!important;line-height:1.35!important}
+section[data-testid="stSidebar"] label,section[data-testid="stSidebar"] .stMarkdown p{font-size:1rem!important}
 </style>
 <div class="hero"><h1>📸 SEIF PHOTO STUDIO PRO MAX</h1><p>استوديو الصور • مكتبة الخلفيات • الصور الرسمية • سجل المشاريع</p></div>
 """,unsafe_allow_html=True)
