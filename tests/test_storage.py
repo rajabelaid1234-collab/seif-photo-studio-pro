@@ -9,14 +9,10 @@ def test_expired_items_are_deleted_but_fresh_items_remain(tmp_path, monkeypatch)
     monkeypatch.setattr(storage.time, "time", lambda: clock["now"])
 
     expired_id = storage.save_item("owner-a", "old.png", b"old")
+    # The second item is created 20 days later, so it remains fresh at day 31.
+    clock["now"] += 20 * storage.DAY
     fresh_id = storage.save_item("owner-a", "fresh.png", b"fresh")
-
-    # Move the first item beyond its 30-day expiry; leave the second unexpired.
-    with storage._conn() as connection:
-        connection.execute(
-            "UPDATE items SET expires=? WHERE id=?",
-            (clock["now"] - 1, expired_id),
-        )
+    clock["now"] += 11 * storage.DAY
 
     assert storage.cleanup_expired() == 1
     assert storage.get_bytes("owner-a", expired_id) is None
