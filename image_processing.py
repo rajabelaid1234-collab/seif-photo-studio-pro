@@ -68,18 +68,21 @@ def safe_name(name: str, default: str = "photo") -> str:
 def image_to_bytes(
     image: Image.Image, format: str = "PNG", quality: int = 95
 ) -> bytes:
+    """Export a PIL image as PNG, JPEG or WebP; JPEG composites transparency on white."""
     buffer = io.BytesIO()
     fmt = format.upper()
 
     if fmt in ("JPG", "JPEG"):
         background = Image.new("RGB", image.size, "white")
-        if image.mode == "RGBA":
-            background.paste(image, mask=image.getchannel("A"))
-        else:
-            background.paste(image.convert("RGB"))
+        rgba = image.convert("RGBA")
+        background.paste(rgba, mask=rgba.getchannel("A"))
         background.save(buffer, "JPEG", quality=quality, optimize=True)
-    else:
+    elif fmt == "WEBP":
+        image.save(buffer, "WEBP", quality=quality, method=4)
+    elif fmt == "PNG":
         image.save(buffer, "PNG", optimize=True)
+    else:
+        raise ValueError("Unsupported format. Use PNG, JPEG or WEBP.")
 
     return buffer.getvalue()
 
@@ -467,3 +470,27 @@ def load_project(
             images[item["name"]] = load_image(io.BytesIO(data))
 
     return images, manifest.get("metadata", {})
+
+
+def brush_edit(
+    cutout: Image.Image,
+    original: Image.Image,
+    stroke_mask: Image.Image,
+    restore: bool,
+) -> Image.Image:
+    """Restore or erase the pixels covered by a painted grayscale stroke mask.
+
+    stroke_mask: white pixels indicate the area painted by the user.
+    Restore uses original RGB pixels and makes them opaque; erase makes them transparent.
+    """
+    result = cutout.convert("RGBA").copy()
+    mask = stroke_mask.convert("L").resize(result.size, Image.Resampling.NEAREST)
+    alpha = result.getchannel("A")
+    if restore:
+        source = original.convert("RGBA").resize(result.size, Image.Resampling.LANCZOS)
+        result = Image.composite(source, result, mask)
+        new_alpha = Image.composite(Image.new("L", result.size, 255), alpha, mask)
+    else:
+        new_alpha = Image.composite(Image.new("L", result.size, 0), alpha, mask)
+    result.putalpha(new_alpha)
+    return result
