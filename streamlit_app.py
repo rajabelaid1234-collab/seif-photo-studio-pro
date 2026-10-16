@@ -115,16 +115,16 @@ def add_to_library(image, filename, fmt="PNG"):
 if page == "مكتبة الخلفيات":
     st.header("🖼️ مكتبة خلفيات التصوير")
     st.write("اختر صورة من البطاقات أدناه. عند الضغط على «استخدم هذه الخلفية»، سينقلك الموقع إلى الاستوديو ويجهّزها للتطبيق على صورتك.")
-    # Search for usable scene/background photographs, not generic event photos.
+    # Restrict the search to actual interiors/scenery that can work behind a portrait.
     category_labels = {
-        "أعراس وقاعات زفاف": "wedding hall interior",
-        "خلفيات استوديو رمادية وبيضاء": "photography studio backdrop",
-        "بورتريه فاخر وديكور كلاسيكي": "luxury interior room",
-        "خلفيات تونسية تقليدية": "Sidi Bou Said architecture",
-        "طبيعة خضراء ومناظر واسعة": "landscape panorama",
-        "بحر وشواطئ جميلة": "beach coastline landscape",
-        "حدائق وأزهار": "flower garden landscape",
-        "مدن ومعمار أنيق": "historic city street architecture",
+        "أعراس وقاعات زفاف": '"empty wedding hall" OR "wedding venue interior" OR "empty ballroom"',
+        "خلفيات استوديو رمادية وبيضاء": '"studio backdrop" OR "photo studio background"',
+        "بورتريه فاخر وديكور كلاسيكي": '"luxury interior" OR "classic living room"',
+        "خلفيات تونسية تقليدية": '"Sidi Bou Said architecture" OR "Tunisian courtyard"',
+        "طبيعة خضراء ومناظر واسعة": '"forest landscape" OR "green landscape panorama"',
+        "بحر وشواطئ جميلة": '"empty beach landscape" OR "coastline landscape"',
+        "حدائق وأزهار": '"flower garden landscape" OR "botanical garden"',
+        "مدن ومعمار أنيق": '"historic city architecture" OR "old town street"',
     }
     excluded_terms = (
         "statue", "sculpture", "monument", "memorial", "grave", "cemetery",
@@ -132,11 +132,12 @@ if page == "مكتبة الخلفيات":
         "underwater", "under water", "macro", "close-up", "close up",
         "water drop", "raindrop", "dew drop", "single drop", "fungus",
         "mushroom", "insect", "microscope", "abstract texture",
-        # Exclude event/documentary photos that are unsuitable as portrait backgrounds.
-        "dancing", "dance", "dancer", "people", "crowd", "bride and groom",
+        # Reject people/event/documentary scenes; this gallery is for photo backgrounds only.
+        "dancing", "dance", "dancer", "people", "crowd", "bride", "groom",
         "wedding ceremony", "ceremony", "signing", "contract", "marriage license",
-        "priest", "church", "church wedding", "worship", "congregation",
-        "portrait of", "person", "couple", "guests", "reception guests",
+        "priest", "church", "worship", "congregation", "portrait of", "person",
+        "couple", "guests", "reception guests", "wedding party", "wedding guests",
+        "wedding dance", "marriage", "wedding photographer", "wedding photography",
     )
     chosen_category = st.selectbox(
         "نوع الخلفية",
@@ -158,8 +159,7 @@ if page == "مكتبة الخلفيات":
                     item for item in found
                     if not any(term in item["title"].lower() for term in excluded_terms)
                 ]
-                # Never fall back to generic event photos: if unsuitable results are filtered out,
-                # tell the user honestly rather than showing people/ceremonies as backgrounds.
+                # Do not silently replace rejected results with unrelated photos.
                 st.session_state["standalone_background_results"] = filtered[:10]
                 st.session_state["standalone_background_results_category"] = active_category
         results = st.session_state["standalone_background_results"]
