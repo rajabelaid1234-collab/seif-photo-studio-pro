@@ -12,7 +12,7 @@ st.markdown("""
 .hero{padding:1.2rem 1.5rem;border-radius:18px;background:linear-gradient(120deg,#111827,#41465a);color:#fff;margin-bottom:1rem}
 .hero h1{margin:0;font-size:2rem}.hero p{margin:.45rem 0 0;color:#e4e7ef}
 div[data-testid="stButton"] button,div[data-testid="stDownloadButton"] button{border-radius:10px;min-height:2.55rem}
-section[data-testid="stSidebar"]{border-right:1px solid #ddd}
+section[data-testid="stSidebar"]{border-left:1px solid #ddd;border-right:0;order:2} div[data-testid="stAppViewContainer"] > .main{order:1}
 </style>
 <div class="hero"><h1>📸 SEIF PHOTO STUDIO PRO MAX</h1><p>استوديو الصور • مكتبة الخلفيات • الصور الرسمية • سجل المشاريع</p></div>
 """,unsafe_allow_html=True)
