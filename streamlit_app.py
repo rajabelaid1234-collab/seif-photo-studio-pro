@@ -115,15 +115,16 @@ def add_to_library(image, filename, fmt="PNG"):
 if page == "مكتبة الخلفيات":
     st.header("🖼️ مكتبة خلفيات التصوير")
     st.write("اختر صورة من البطاقات أدناه. عند الضغط على «استخدم هذه الخلفية»، سينقلك الموقع إلى الاستوديو ويجهّزها للتطبيق على صورتك.")
+    # Keep Wikimedia queries short: long queries require every word to match and often return zero files.
     category_labels = {
-        "أعراس وقاعات زفاف": "wedding hall wedding reception wedding decor",
-        "خلفيات استوديو رمادية وبيضاء": "portrait photography studio seamless backdrop",
-        "بورتريه فاخر وديكور كلاسيكي": "luxury classic interior elegant room",
-        "خلفيات تونسية تقليدية": "Sidi Bou Said Tunisia architecture courtyard",
-        "طبيعة خضراء ومناظر واسعة": "green forest landscape scenic panorama",
-        "بحر وشواطئ جميلة": "tropical beach coastline turquoise sea",
-        "حدائق وأزهار": "beautiful flower garden colorful flower beds",
-        "مدن ومعمار أنيق": "historic old town street beautiful architecture",
+        "أعراس وقاعات زفاف": "wedding",
+        "خلفيات استوديو رمادية وبيضاء": "studio backdrop",
+        "بورتريه فاخر وديكور كلاسيكي": "luxury interior",
+        "خلفيات تونسية تقليدية": "Tunisia architecture",
+        "طبيعة خضراء ومناظر واسعة": "forest landscape",
+        "بحر وشواطئ جميلة": "beach",
+        "حدائق وأزهار": "flower garden",
+        "مدن ومعمار أنيق": "historic city",
     }
     excluded_terms = (
         "statue", "sculpture", "monument", "memorial", "grave", "cemetery",
@@ -148,10 +149,17 @@ if page == "مكتبة الخلفيات":
         ):
             with st.spinner("جارٍ البحث عن صور مناسبة..."):
                 found = search_commons_backgrounds(category_labels[active_category], limit=50)
+                # If the two-word search is too restrictive, retry using the category's main keyword.
+                if not found:
+                    fallback_query = category_labels[active_category].split()[0]
+                    found = search_commons_backgrounds(fallback_query, limit=50)
                 filtered = [
                     item for item in found
                     if not any(term in item["title"].lower() for term in excluded_terms)
                 ]
+                # Filtering should not accidentally hide every result; use the original search results as a fallback.
+                if not filtered:
+                    filtered = found
                 st.session_state["standalone_background_results"] = filtered[:10]
                 st.session_state["standalone_background_results_category"] = active_category
         results = st.session_state["standalone_background_results"]
