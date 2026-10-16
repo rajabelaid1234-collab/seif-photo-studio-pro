@@ -55,10 +55,45 @@ with st.sidebar:
     st.markdown("## ⚙️ لوحة التحكم")
     page = st.radio(
         "القسم",
-        ["استوديو الصور", "صانع الصور الرسمية", "حول الاستوديو"],
+        ["استوديو الصور", "صانع الصور الرسمية", "مكتبتي", "حول الاستوديو"],
     )
     st.divider()
     st.caption("SEIF PHOTO STUDIO PRO MAX")
+
+if "photo_library" not in st.session_state:
+    st.session_state["photo_library"] = []
+
+def add_to_library(image, filename, fmt="PNG"):
+    data = image_to_bytes(image, fmt)
+    st.session_state["photo_library"].append({
+        "filename": filename,
+        "format": fmt,
+        "data": data,
+    })
+
+if page == "مكتبتي":
+    st.header("🗂️ مكتبتي")
+    st.write("احفظ الصور الأصلية والنتائج هنا للوصول إليها خلال جلسة العمل الحالية.")
+    library = st.session_state["photo_library"]
+    if not library:
+        st.info("مكتبتك فارغة الآن. افتح استوديو الصور واحفظ صورة أو نتيجة فيها.")
+    else:
+        st.caption(f"عدد الصور المحفوظة: {len(library)}")
+        for i, item in enumerate(library):
+            with st.container(border=True):
+                st.write(f"**{item['filename']}**")
+                st.download_button(
+                    "⬇️ تنزيل",
+                    data=item["data"],
+                    file_name=item["filename"],
+                    mime="image/png" if item["format"] == "PNG" else "image/jpeg",
+                    key=f"library_download_{i}",
+                )
+                if st.button("🗑️ حذف من المكتبة", key=f"library_delete_{i}"):
+                    st.session_state["photo_library"].pop(i)
+                    st.rerun()
+    st.warning("مهم: هذه نسخة أولية من المكتبة تحفظ الصور داخل جلسة Streamlit فقط. لا تعتبر تخزينًا دائمًا؛ التخزين الدائم لكل حساب يحتاج قاعدة بيانات وتخزينًا سحابيًا آمنًا.")
+    st.stop()
 
 if page == "حول الاستوديو":
     st.header("عن الاستوديو")
@@ -93,6 +128,10 @@ except Exception as exc:
     st.stop()
 
 st.success(f"تم تحميل الصورة: {uploaded.name}")
+
+if st.button("📥 حفظ الصورة الأصلية في مكتبتي", key="save_original_to_library"):
+    add_to_library(original, f"original_{uploaded.name.rsplit('.', 1)[0]}.png", "PNG")
+    st.success("تم حفظ الصورة الأصلية في مكتبتك لهذه الجلسة.")
 
 if page == "صانع الصور الرسمية":
     st.header("🪪 صانع الصور الرسمية")
@@ -147,6 +186,10 @@ if page == "صانع الصور الرسمية":
     if result is not None:
         st.subheader("النتيجة")
         st.image(result, caption="الصورة الرسمية", width="stretch")
+        if st.button("🗂️ حفظ الصورة الرسمية في مكتبتي", key="save_official_to_library"):
+            add_to_library(result, "seif_official_photo.png", "PNG")
+            st.success("تم حفظ الصورة الرسمية في مكتبتك لهذه الجلسة.")
+
         st.download_button(
             "⬇️ تنزيل الصورة الرسمية",
             data=image_to_bytes(result, "JPEG"),
@@ -301,6 +344,10 @@ else:
             horizontal=True,
         )
         file_bytes = image_to_bytes(result, fmt)
+
+        if st.button("🗂️ حفظ النتيجة في مكتبتي", key="save_studio_to_library"):
+            add_to_library(result, "seif_photo_final.png", "PNG")
+            st.success("تم حفظ النتيجة في مكتبتك لهذه الجلسة.")
 
         st.download_button(
             "⬇️ تنزيل الصورة النهائية",
