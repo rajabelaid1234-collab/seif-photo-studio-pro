@@ -5,10 +5,39 @@ import io
 import json
 import urllib.parse
 import urllib.request
+from pathlib import Path
 import numpy as np
 import streamlit as st
 from PIL import Image, ImageChops, ImageOps
 from streamlit_drawable_canvas import st_canvas
+
+def load_user_backgrounds():
+    """Load persistent user-added backgrounds from the repository's backgrounds/ folder."""
+    folder = Path(__file__).parent / "backgrounds"
+    allowed = {".jpg", ".jpeg", ".png", ".webp"}
+    items = []
+    if not folder.exists():
+        return items
+    for path in sorted(folder.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in allowed:
+            continue
+        try:
+            with Image.open(path) as source:
+                image = ImageOps.exif_transpose(source).convert("RGB")
+                image.load()
+            items.append({
+                "title": path.stem.replace("_", " ").replace("-", " "),
+                "preview": image,
+                "url": None,
+                "page": None,
+                "license": "ملف مضاف إلى مستودع SEIF PHOTO STUDIO",
+                "artist": "",
+                "local_image": image,
+            })
+        except Exception:
+            continue
+    return items
+
 
 def search_commons_backgrounds(query, limit=18):
     """Search Wikimedia Commons for reusable background photos and return license metadata."""
@@ -125,6 +154,7 @@ if page == "مكتبة الخلفيات":
         "بحر وشواطئ جميلة": '"empty beach landscape" OR "coastline landscape"',
         "حدائق وأزهار": '"flower garden landscape" OR "botanical garden"',
         "مدن ومعمار أنيق": '"historic city architecture" OR "old town street"',
+        "خلفياتي الخاصة من GitHub": "",
     }
     excluded_terms = (
         "statue", "sculpture", "monument", "memorial", "grave", "cemetery",
@@ -198,6 +228,8 @@ if page == "مكتبة الخلفيات":
                 if active_category == "خلفيات استوديو رمادية وبيضاء":
                     # This category is generated locally, so it can never return people or unrelated photographs.
                     filtered = make_studio_backdrops()
+                elif active_category == "خلفياتي الخاصة من GitHub":
+                    filtered = load_user_backgrounds()
                 else:
                     found = search_commons_backgrounds(category_labels[active_category], limit=50)
                     filtered = [
